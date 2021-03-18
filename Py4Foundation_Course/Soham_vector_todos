@@ -1,0 +1,28 @@
+# Vector ToDo 1
+# Create buffer of approx 1m # todo create a square buffer ==> cap_style = 3
+buffer = place.buffer(0.0015, cap_style = 3)
+
+
+# Vector ToDo 2
+# Print fields name # todo create your own loop to print columns
+for column_index in range(railway.shape[1]):      #shape of railway is [n_rows, n_columns]. We can chose the number of columns.
+    print(railway.iloc[:,column_index].name)      #iloc to access location by index. Then, use "name" method to get the name of the accessed column.
+    
+    
+# Vector ToDo 3
+# todo is central railway (slow & express) & Mumbai-Pune Railway crossed?
+# My approach: I did not know whether this problem was to be approached graphically or in some other way. 
+# I basically plotted both the railways, and visually observed that they are NOT INTERSECTING.
+
+# Conditions to get the subsets which we want: 
+condition_Central_Slow = railway.name == 'Central Railway (Slow)'
+condition_Central_Express = railway.name == 'Central Railway (Express)'
+condition_Mumbai_Pune = railway.name == 'Mumbai-Pune Railway'
+railway_Central_Slow_or_Express = railway[(condition_Central_Express | condition_Central_Slow)] # bitwise OR operator
+railway_Mumbai_Pune = railway[condition_Mumbai_Pune]
+
+# Plotting
+ax = railway_Mumbai_Pune.plot(colors='r', label='Mumbai-Pune Railway')
+railway_Central_Slow_or_Express.plot(colors='b', ax=ax, label='Central Railway (Slow, Express)')
+ax.legend(loc='lower right', frameon=False, prop={'size': 8})
+fig
