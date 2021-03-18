@@ -26,3 +26,14 @@ ax = railway_Mumbai_Pune.plot(colors='r', label='Mumbai-Pune Railway')
 railway_Central_Slow_or_Express.plot(colors='b', ax=ax, label='Central Railway (Slow, Express)')
 ax.legend(loc='lower right', frameon=False, prop={'size': 8})
 fig
+
+
+# Vector ToDo question 4: will you be able to write merge rail + building file?
+# No, because only 1 shape file can only have 1 type of geometry (pt, line or polygon).
+# But Python allows us to do calculations with such geodataframes.
+
+
+# Vector ToDo 5
+# Change crs of the shapefile    # todo print area of each building in meter or square meter
+build.to_crs(epsg=32643)
+print(build.area)
