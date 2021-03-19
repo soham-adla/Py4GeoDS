@@ -1,0 +1,10 @@
+# Raster ToDo 1
+#todo extract water area (NDVI<=0), calculate water area & if possible replace ndvi values of water areas as 1 and for other areas 0. Write the file.
+#hints : ndvi<=0, Create a mask of true false (refere vector session), duplicate the ndvi variable,
+# change the value 1 in duplicate ndvi variable where there is a true in mask and vice a versa.
+
+NDVI_water = NDVI                     # copying NDVI into NDVI_water
+mask_water = NDVI<=0                  # creating a mask of NDVI<=0 values
+NDVI_water = mask_water               # assigning the mask to NDVI_water
+NDVI_water = NDVI_water.astype(int)   # converting boolean dataframe into integer type dataframe
+show(NDVI_water)      
