@@ -3,8 +3,17 @@
 #hints : ndvi<=0, Create a mask of true false (refere vector session), duplicate the ndvi variable,
 # change the value 1 in duplicate ndvi variable where there is a true in mask and vice a versa.
 
-NDVI_water = NDVI                     # copying NDVI into NDVI_water
-mask_water = NDVI<=0                  # creating a mask of NDVI<=0 values
-NDVI_water = mask_water               # assigning the mask to NDVI_water
-NDVI_water = NDVI_water.astype(int)   # converting boolean dataframe into integer type dataframe
-show(NDVI_water)      
+NDVI_water = NDVI                   # copying NDVI into NDVI_water
+# show(NDVI_water)
+mask_water = NDVI<=0                # creating a mask of NDVI<=0 values
+NDVI_water = mask_water             # assigning the mask to NDVI_water
+NDVI_water = NDVI_water.astype(int) # converting boolean dataframe into int type dataframe
+water_area = NDVI_water.sum()       # since each pixel is of 1 sq.m., water pixels = 1, other pixels = 0
+                                    # Total water area = sum of nd array (NDVI_water) = 56477 sq. m. (5.6 ha)   
+# copying geospatial profile (EPSG:32643) from nir (or any other) raster
+profile_NDVI_water = nir_clip.profile.copy()
+profile_NDVI_water['dtype'] = 'int32'   # changing data type to int32 (because water pixels NDVI<=0 are assigned as 1, and non-water NDVI>0 are assigned as 0)
+
+# Saving file with water pixels assigned to value = 1, and non-water pixels having value = 0
+with rasterio.open("G:/Backup_1/Documents/My_writings/Notes/Courses/Albedo_Foundation_Python_course/Day_3/Raster_Pratice/NDVI_water_as_1.tif", "w", **profile_NDVI_water) as dest:
+    dest.write_band(1,NDVI_water)
