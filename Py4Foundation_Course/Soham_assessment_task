@@ -1,0 +1,176 @@
+'''
+Soham's submission for assessment task
+STEPS FOLLOWED:
+Step 0: Import all packages
+Preparation for Step 1: Definition of all functions:
+        1) Function to clip raw images to AOI,
+        2) Function to calculate NDVI,
+        3) Function to copy profile
+Step 1: Creation of NDVI maps
+        1a) Reading input raw raster
+        1b) Clipping raster images to Bandra pixel
+        1c) Calculation of NDVI
+Step 2: Masking only probable vegetation area (NDVI>=0) from NDVI map
+Step 3: Using shapefile (natural.shp) and zonal statistics to identify "greenest" park in Bandra
+        3a) Importing natural.shp and NDVI map
+        3b) Zonal Statistics from Rasterstats, identifying "greenest" park, plotting histograph of NDVI across all parks.
+'''
+
+import rasterio
+import os, glob
+import numpy as np
+from rasterio.plot import show
+import geopandas as gpd
+import numpy.ma as ma       # for masked array (Ref: https://numpy.org/doc/stable/reference/maskedarray.generic.html)
+import pandas as pd, matplotlib.pyplot as plt
+
+# next two lines are added to prevent Value Error on trying to read shape file (AOI.shp)
+from shapely import speedups
+speedups.disable()
+
+# next line is added to prevent Attribute Error on trying to mask using rasterio.mask
+from rasterio.mask import mask
+
+# rasterstats for zonal statistics (https://pythonhosted.org/rasterstats/)
+import rasterstats as rs
+
+
+########################### STEP 1 start: CREATION OF NDVI MAP #############################
+
+####### PREP. FOR STEP 1 #########
+# All function definitions #
+
+# Function to clip raw images to AOI (Bandra)
+def clip_raw_images(rasterfile,shapefile,output_path,output_filename):
+    image, trans = rasterio.mask.mask(rasterfile, shapefile.envelope, crop=True)
+    meta = rasterfile.meta
+    meta.update({"driver": "GTiff",  # soham: unchanged from input file
+                 "height": image.shape[1],  # soham: change to mask shape file details
+                 "width": image.shape[2],  # soham: change to mask shape file details
+                 "transform": trans})  # soham: change to mask shape file details
+    with rasterio.open(output_path + output_filename + ".tif","w", **meta) as dest:
+        dest.write(image)
+
+# Function to calculate NDVI #
+def calculate_ndvi(img_red, img_nir):
+    nir_arr = img_nir.read(1).astype('float64')
+    red_arr = img_red.read(1).astype('float64')
+    ndvi = np.divide((nir_arr-red_arr), (nir_arr+red_arr))
+    return ndvi         # no return value because it is writing a file to the same directory
+                        # which can then be used for further analysis
+
+# Function to copy profile for georeferencing #
+def copy_profile(input_profile_raster, profile_dtype):
+    profile = input_profile_raster.profile.copy()
+    profile['dtype'] = profile_dtype
+    return profile
+
+
+####### STEP 1(a) #########
+# Reading input raw raster (band 4, band 8) and shape (AOI - Bandra) files #
+
+# Paths for raster files and shapefile
+path="G:/Backup_1/Documents/My_writings/Notes/Courses/Albedo_Foundation_Python_course/Day_3/Raster_Pratice/"
+
+# Reading input raw raster (band 4, band 8) and shape (AOI - Bandra) files #
+raw_red_raster = rasterio.open(path + "T43QBB_20200118T054151_B04_10m.jp2")
+raw_nir_raster = rasterio.open(path + "T43QBB_20200118T054151_B08_10m.jp2")
+bandra_pixel = gpd.read_file(path + "AOI.shp")
+
+####### STEP 1(b) #########
+# Clipping raster images to Bandra pixel
+
+# Path where clipped images should be stored
+output_path = "G:/Backup_1/Documents/My_writings/Notes/Courses/Albedo_Foundation_Python_course/Assignment/"
+
+# Actual clipping of the raster images
+clip_raw_images(raw_red_raster,bandra_pixel,output_path,'red_bandra') # output path, since function doesn't have return value
+red_raster_bandra = rasterio.open(output_path + 'red_bandra.tif')
+
+clip_raw_images(raw_nir_raster,bandra_pixel,output_path,'nir_bandra') # output path, since function doesn't have return value
+nir_raster_bandra = rasterio.open(output_path + 'nir_bandra.tif')
+
+####### STEP 1(c) #########
+# Calculation of NDVI #
+NDVI = calculate_ndvi(red_raster_bandra, nir_raster_bandra)
+
+########################### STEP 1 end: CREATION OF NDVI MAP #############################
+
+
+
+########################### STEP 2 start: MASKING VEGETATION AREA FROM NDVI MAP #############################
+# Masking only probable vegetation area from NDVI map #
+# Reference for masked array: https://numpy.org/doc/stable/reference/maskedarray.generic.html
+
+NDVI_veg = NDVI                     # copying NDVI into NDVI_veg
+mask_nonveg = NDVI<0                # creating a mask of NDVI<0 values
+NDVI_veg[mask_nonveg] = np.nan
+
+# Copy profile to save file (so that it can be combined with natural.shp later)
+profile = nir_raster_bandra.profile.copy()  # could've also been red_raster_bandra
+profile['dtype'] = 'float64'
+with rasterio.open(output_path + 'NDVI_veg_bandra.tif', "w", **copy_profile(nir_raster_bandra,'float64')) as dest:
+    dest.write_band(1, NDVI_veg)
+
+########################### STEP 2 end: MASKING VEGETATION AREA FROM NDVI MAP ###############################
+
+
+
+
+
+########################### STEP 3 start: USING NATURAL.SHP FOR PARK-WISE MEAN NDVI CALC. #############################
+####### STEP 3(a) #########
+# Importing natural.shp and NDVI_bandra #
+natural_path = 'G:/Backup_1/Documents/My_writings/Notes/Courses/Albedo_Foundation_Python_course/Day_2/shape/'
+natural_bandra_shapefile = gpd.read_file(natural_path + 'natural.shp')
+parks_bandra_shapefile = natural_bandra_shapefile[natural_bandra_shapefile['type']=='park']
+parks_bandra_shapefile = parks_bandra_shapefile.to_crs(epsg=32643)  # epsg=32643
+parks_bandra_shapefile.plot()
+
+
+# NDVI_veg_bandra = rasterio.open(output_path + 'NDVI_veg_bandra.tif')
+# with rasterio.open(output_path + 'NDVI_veg_bandra_1.tif', "w", **copy_profile(nir_raster_bandra,'float64')) as dest:
+#     dest.write_band(1, NDVI_veg_bandra)
+# print(NDVI_veg_bandra.crs)  # epsg=32643
+# show((NDVI_veg_bandra))
+
+####### STEP 3(b) #########
+# Zonal Stats from Rasterstats #
+zs = []
+zs = rs.zonal_stats(parks_bandra_shapefile, output_path +  'NDVI_veg_bandra.tif', stats="mean", copy_properties=True, geojson_out=True)
+# geojson_out = True is important because if not included, all properties (name, mean etc.) are not copied
+## This was strange: AFFINE WASN'T HAPPENING WITH THE RASTER VARIABLE!
+# BUT IT WAS SUCCESSFUL IF INPUT WAS SHAPE FILE AS A VARIABLE, AND RASTER DIRECTLY FROM FILE. THERE WAS NO NEED FOR ANY AFFINE.
+
+# putting the list of dicts into an intermediate list of dicts (# Ref: https://stackoverflow.com/a/54144667/4590888)
+zs_intermediate = [d.get('properties') for d in zs]
+# extracting lists from the intermediate list of dicts (zs_intermediate)
+# Ref: https://stackoverflow.com/a/54144667/4590888
+zs_name = [d.get('name') for d in zs_intermediate]
+zs_NDVI = [d.get('mean') for d in zs_intermediate]
+
+# Converting lists into pandas dataframe (by "zipping the lists")
+# Ref: https://www.geeksforgeeks.org/create-a-pandas-dataframe-from-lists/
+zs_df = pd.DataFrame(list(zip(zs_name, zs_NDVI)), columns=['Park Name', 'Mean NDVI'])
+
+# sorting the dataframe by mean NDVI values, in descending order
+zs_df = zs_df.sort_values(by = 'Mean NDVI', ascending=False)
+# first row has the greenest park in Bandra: "Bhagvan Mahavir Garden", Mean NDVI = 0.641186
+print(zs_df.iloc[0])
+
+# Plotting histogram
+ax = zs_df.plot.hist(bins=6, alpha=1, edgecolor = "grey")
+ax.set_xlabel("NDVI (-)")
+ax.set_ylabel("No. of buildings")
+
+# Map with greenest park identified separately
+greenest_park = zs_df.iloc[0]['Park Name']
+greenest_park_shapefile = parks_bandra_shapefile    # Copying parks shapefile into greenest park shapefile
+greenest_park_shapefile = greenest_park_shapefile[greenest_park_shapefile['name']==greenest_park]
+fig, ax = plt.subplots(1, 1)
+fig.suptitle('Greenest park in Bandra')
+parks_bandra_shapefile.plot(ax=ax, legend=True)
+greenest_park_shapefile.plot(ax=ax, facecolor="Red")
+greenest_park_shapefile.apply(lambda greenest_park_shapefile: ax.annotate(text=greenest_park_shapefile['name'], xy=greenest_park_shapefile.geometry.centroid.coords[0], ha='center'),axis=1);
+# Ref for annotation: https://stackoverflow.com/a/42214156/4590888
+########################### STEP 3 end: USING NATURAL.SHP FOR PARK-WISE MEAN NDVI CALC. #############################
